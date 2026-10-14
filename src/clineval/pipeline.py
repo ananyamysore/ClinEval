@@ -89,7 +89,7 @@ def evaluate(frame: pd.DataFrame, out_dir: str|Path, *, metadata: dict|None=None
         model_result=next((r for r in results if r.get("model")==str(model)),{})
         selected=model_result.get("threshold_selection",{}).get("threshold",threshold)
         cols=subgroup_columns or meta.get("subgroup_columns",[])
-        if cols: subgroups.extend([{**r,"model":str(model)} for r in subgroup_metrics(test,subgroup_columns=cols,threshold=float(selected),n_resamples=n_bootstrap,seed=seed)])
+        if cols: subgroups.extend([{**r,"model":str(model)} for r in subgroup_metrics(test,subgroup_columns=cols,threshold=float(selected),ci_resamples=n_bootstrap,seed=seed)])
     comparisons=compare_models(data,n_resamples=n_bootstrap,seed=seed) if data.model.nunique()>1 else []
     root=Path(out_dir); root.mkdir(parents=True,exist_ok=True)
     files=write_tables(root,metrics=results,subgroups=subgroups,audit=audit,comparisons=comparisons)
