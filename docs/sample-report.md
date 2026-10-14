@@ -1,4 +1,4 @@
 # Synthetic sample report
 
-Run `python examples/run_synthetic.py` to generate `reports/synthetic-example/report.md`, machine-readable JSON/CSV tables, and ROC, precision-recall, and calibration figures. That command generates the report from the committed deterministic synthetic fixture at runtime. Any resulting values are explicitly labeled synthetic and are not clinical evidence. No numeric performance results are asserted in this documentation.
+The CI workflow runs `python examples/run_synthetic.py` and prints the generated report. The example uses a deterministic synthetic fixture and writes machine-readable JSON/CSV tables plus ROC, precision-recall, and calibration figures under `reports/synthetic-example/`. Results are explicitly labeled synthetic and are not clinical evidence. They validate software execution only, not real-world performance.
 
