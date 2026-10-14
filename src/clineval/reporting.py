@@ -24,6 +24,7 @@ def write_json(path: str|Path, obj: Any) -> Path:
         if isinstance(x,(list,tuple)): return [clean(v) for v in x]
         if isinstance(x,(np.integer,)): return int(x)
         if isinstance(x,(np.floating,)): return float(x) if np.isfinite(x) else None
+        if isinstance(x,(np.bool_,)): return bool(x)
         if isinstance(x,np.ndarray): return clean(x.tolist())
         if isinstance(x,(pd.Timestamp,)): return x.isoformat()
         if pd.isna(x) if not isinstance(x,(dict,list,tuple,np.ndarray)) else False: return None
