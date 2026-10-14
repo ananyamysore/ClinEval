@@ -1,0 +1,17 @@
+{
+  "patient_id_column": "patient_id",
+  "split_column": "split",
+  "group_key": "patient_id",
+  "threshold_selected_on": "validation",
+  "calibration_fit_on": "validation",
+  "fit_scopes": {
+    "normalization": "train",
+    "imputation": "train",
+    "feature_selection": "train",
+    "threshold_tuning": "validation",
+    "calibration": "validation"
+  },
+  "subgroup_columns": ["subgroup"],
+  "cohort_counts": {"description": "fill in from the eligible study cohort"}
+}
+

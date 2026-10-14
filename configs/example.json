@@ -1,0 +1,9 @@
+{
+  "threshold": 0.5,
+  "target_specificity": 0.9,
+  "subgroup_columns": ["subgroup"],
+  "bootstrap_resamples": 1000,
+  "seed": 2026,
+  "required_audit_metadata": ["patient_id_column", "split_column", "fit_scopes", "threshold_selected_on", "calibration_fit_on"]
+}
+

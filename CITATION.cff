@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use ClinEval, please cite the software and record its version."
+title: "ClinEval"
+type: software
+version: 0.1.0
+date-released: 2026-10-13
+abstract: "An auditable Python toolkit for evaluating biomedical prediction models."
+license: MIT
+
