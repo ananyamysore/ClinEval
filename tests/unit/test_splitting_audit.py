@@ -26,17 +26,25 @@ def test_valid_control_passes_overlap_and_known_defects_are_detected():
     findings=by_rule(audit_evaluation(valid,metadata=meta,group_key="patient_id"))
     for rule in ("AUDIT_PATIENT_OVERLAP","AUDIT_GROUP_LEAKAGE","AUDIT_TEMPORAL_ORDER",
                  "AUDIT_FEATURE_AFTER_INDEX","AUDIT_DUPLICATE_RECORDS",
+                 "AUDIT_SUSPICIOUS_DUPLICATES","AUDIT_FEATURE_AVAILABILITY",
                  "AUDIT_TARGET_LEAKAGE_INDICATORS","AUDIT_THRESHOLD_LEAKAGE",
                  "AUDIT_CALIBRATION_LEAKAGE","AUDIT_MISSING_OUTCOMES",
                  "AUDIT_INVALID_PROBABILITIES","AUDIT_INCOMPLETE_REPORTING"):
         assert findings[rule]["status"]=="passed", rule
-    defects={"patient_overlap","temporal_leakage","invalid_probabilities","missing_labels","test_threshold","target_leakage","duplicate_records"}
+    defects={"patient_overlap","temporal_leakage","temporal_order_violation","future_feature_time",
+             "invalid_probabilities","malformed_multiclass","missing_labels","test_threshold",
+             "test_calibration","test_preprocessing_fit","target_leakage","duplicate_records",
+             "suspicious_duplicates","incomplete_reporting"}
     bad,bad_meta=generate_synthetic_predictions(seed=4,n_patients=90,defects=defects)
     findings=by_rule(audit_evaluation(bad,metadata=bad_meta,group_key="patient_id"))
-    for rule in ("AUDIT_PATIENT_OVERLAP","AUDIT_GROUP_LEAKAGE","AUDIT_FEATURE_AFTER_INDEX",
+    for rule in ("AUDIT_PATIENT_OVERLAP","AUDIT_GROUP_LEAKAGE","AUDIT_TEMPORAL_ORDER","AUDIT_FEATURE_AFTER_INDEX",
                  "AUDIT_DUPLICATE_RECORDS","AUDIT_TARGET_LEAKAGE_INDICATORS","AUDIT_THRESHOLD_LEAKAGE",
-                 "AUDIT_MISSING_OUTCOMES","AUDIT_INVALID_PROBABILITIES"):
+                 "AUDIT_MISSING_OUTCOMES","AUDIT_INVALID_PROBABILITIES","AUDIT_FEATURE_AVAILABILITY",
+                 "AUDIT_MULTICLASS_PROBABILITIES","AUDIT_NORMALIZATION_SCOPE",
+                 "AUDIT_CALIBRATION_SCOPE","AUDIT_CALIBRATION_LEAKAGE"):
         assert findings[rule]["status"]=="violation", rule
+    assert findings["AUDIT_SUSPICIOUS_DUPLICATES"]["status"]=="warning"
+    assert findings["AUDIT_INCOMPLETE_REPORTING"]["status"]=="not_assessable"
 
 
 def test_missing_provenance_is_not_assessed_as_passed():
@@ -44,6 +52,9 @@ def test_missing_provenance_is_not_assessed_as_passed():
     findings=by_rule(audit_evaluation(frame.drop(columns="patient_id"),metadata={}))
     assert findings["AUDIT_PATIENT_OVERLAP"]["status"]=="not_assessable"
     assert findings["AUDIT_THRESHOLD_LEAKAGE"]["status"]=="not_assessable"
+    no_split,_=generate_synthetic_predictions(n_patients=60)
+    findings=by_rule(audit_evaluation(no_split.drop(columns="split"),metadata={},group_key="patient_id"))
+    assert findings["AUDIT_SPLIT_PROVENANCE"]["status"]=="not_assessable"
 
 
 def test_chronology_is_not_assumed_without_temporal_design_declaration():

@@ -5,7 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-DEFECTS={"patient_overlap","temporal_leakage","invalid_probabilities","missing_labels","test_threshold","target_leakage","duplicate_records"}
+DEFECTS={"patient_overlap","temporal_leakage","temporal_order_violation","future_feature_time",
+         "invalid_probabilities","malformed_multiclass","missing_labels","test_threshold",
+         "test_calibration","test_preprocessing_fit","target_leakage","duplicate_records",
+         "suspicious_duplicates","incomplete_reporting"}
 
 
 def generate_synthetic_predictions(*, seed: int=0, n_patients: int=600,
@@ -41,25 +44,42 @@ def generate_synthetic_predictions(*, seed: int=0, n_patients: int=600,
             if miscalibrated: score=float(np.clip(score**0.45,0,1))
             split_rank={"train":0,"validation":1,"test":2}[str(split[i])]
             timestamp=base+pd.Timedelta(days=int(split_rank*(n_patients*repeated_measurements+1)+i*repeated_measurements+visit))
+            feature_time=timestamp-pd.Timedelta(hours=2)
+            if "future_feature_time" in active and i==0 and visit==0:
+                feature_time=timestamp+pd.Timedelta(days=1)
             rows.append({"record_id":f"r{i}_{visit}","patient_id":f"p{i}","dataset_id":"synthetic-demo",
                          "model":"model_demo","split":split[i],"y_true":y,"y_prob":score,
                          "subgroup":groups[i],"prediction_time":timestamp,
+                         "feature_available_time":feature_time,
                          "intended_prediction_time":timestamp-pd.Timedelta(days=1) if "temporal_leakage" in active else timestamp})
     frame=pd.DataFrame(rows)
     if "patient_overlap" in active:
         # Copy a test record into train, retaining the patient ID to create a clear violation.
         row=frame.loc[frame.split=="test"].iloc[0].copy(); row["record_id"]="overlap-copy"; row["split"]="train"
         frame=pd.concat([frame,pd.DataFrame([row])],ignore_index=True)
+    if "temporal_order_violation" in active:
+        train_idx=frame.index[frame.split=="train"][0]
+        frame.loc[train_idx,"prediction_time"]=frame.prediction_time.max()+pd.Timedelta(days=1)
     if "invalid_probabilities" in active:
         frame.loc[0,"y_prob"]=np.nan; frame.loc[1,"y_prob"]=1.4
     if "missing_labels" in active: frame.loc[2,"y_true"]=np.nan
     if "target_leakage" in active: frame["target_outcome_copy"]=frame.y_true
     if "duplicate_records" in active: frame.loc[1,"record_id"]=frame.loc[0,"record_id"]
+    if "suspicious_duplicates" in active:
+        row=frame.iloc[0].copy(); row["record_id"]="suspicious-copy"
+        frame=pd.concat([frame,pd.DataFrame([row])],ignore_index=True)
+    if "malformed_multiclass" in active:
+        frame["prob_class0"]=0.2; frame["prob_class1"]=0.3
     metadata={"patient_id_column":"patient_id","split_column":"split","group_key":"patient_id",
               "threshold_selected_on":"test" if "test_threshold" in active else "validation",
-              "calibration_fit_on":"validation","fit_scopes":{"normalization":"train","imputation":"train","feature_selection":"train","threshold_tuning":"validation","calibration":"validation"},
+              "calibration_fit_on":"test" if "test_calibration" in active else "validation",
+              "fit_scopes":{"normalization":"test" if "test_preprocessing_fit" in active else "train",
+                            "imputation":"train","feature_selection":"train","threshold_tuning":"validation",
+                            "calibration":"test" if "test_calibration" in active else "validation"},
               "forbidden_columns":["target_outcome_copy"] if "target_leakage" in active else [],
               "subgroup_columns":["subgroup"],"cohort_counts":{"total":len(frame)},
-              "temporal_order_required":True}
+              "temporal_order_required":True,"feature_time_columns":["feature_available_time"]}
+    if "test_threshold" in active: metadata["threshold_selected_on"]="test"
+    if "incomplete_reporting" in active: metadata.pop("cohort_counts",None)
     return frame,metadata
 
