@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 from sklearn.metrics import average_precision_score, confusion_matrix, roc_auc_score
 
+
 def _arrays(y_true: Any, y_prob: Any) -> tuple[np.ndarray, np.ndarray]:
     y = np.asarray(y_true)
     p = np.asarray(y_prob, dtype=float)
@@ -46,7 +47,7 @@ def classification_metrics(y_true: Any, y_prob: Any, *, threshold: float = 0.5) 
     ap = float(average_precision_score(y, p)) if pos else None
     brier = float(np.mean((p - y) ** 2))
     return {
-        "n": int(len(y)), "n_positive": int(pos), "n_negative": int(neg),
+        "n": len(y), "n_positive": int(pos), "n_negative": int(neg),
         "prevalence": prevalence, "threshold": float(threshold),
         "roc_auc": auc, "average_precision": ap,
         "sensitivity": sensitivity, "specificity": specificity,

@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from .data import DataValidationError, validate_prediction_table
+from .config import EvaluationConfig, load_config
 from .pipeline import evaluate
 
 
@@ -21,10 +22,11 @@ def main(argv: list[str]|None=None) -> int:
     run=sub.add_parser("evaluate",help="run a complete evaluation and export a report")
     run.add_argument("--input",required=True); run.add_argument("--out",required=True)
     run.add_argument("--metadata",help="JSON provenance and audit metadata file")
-    run.add_argument("--threshold",type=float,default=0.5)
+    run.add_argument("--config",help="validated JSON evaluation configuration")
+    run.add_argument("--threshold",type=float)
     run.add_argument("--target-specificity",type=float)
-    run.add_argument("--subgroups",nargs="*",default=[])
-    run.add_argument("--bootstrap",type=int,default=1000); run.add_argument("--seed",type=int,default=0)
+    run.add_argument("--subgroups",nargs="*")
+    run.add_argument("--bootstrap",type=int); run.add_argument("--seed",type=int)
     args=parser.parse_args(argv)
     try:
         frame=pd.read_csv(args.input)
@@ -33,9 +35,13 @@ def main(argv: list[str]|None=None) -> int:
             print(f"Valid prediction table: {len(frame)} rows")
             return 0
         metadata=json.loads(Path(args.metadata).read_text()) if args.metadata else {}
-        result=evaluate(frame,args.out,metadata=metadata,threshold=args.threshold,
-                        target_specificity=args.target_specificity,subgroup_columns=args.subgroups,
-                        n_bootstrap=args.bootstrap,seed=args.seed)
+        config=load_config(args.config) if args.config else EvaluationConfig()
+        result=evaluate(frame,args.out,metadata=metadata,
+                        threshold=args.threshold if args.threshold is not None else config.threshold,
+                        target_specificity=args.target_specificity if args.target_specificity is not None else config.target_specificity,
+                        subgroup_columns=args.subgroups if args.subgroups is not None else list(config.subgroup_columns),
+                        n_bootstrap=args.bootstrap if args.bootstrap is not None else config.bootstrap_resamples,
+                        seed=args.seed if args.seed is not None else config.seed)
         print(f"Report written to {Path(args.out).resolve() / 'report.json'}")
         print(f"Audit checks: {len(result['audit'])}; warnings/errors: {len(result['warnings'])}")
         return 0

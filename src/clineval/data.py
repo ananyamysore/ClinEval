@@ -70,11 +70,19 @@ def validate_prediction_table(
         issues.append(ValidationIssue("invalid_probability", probability, "probabilities must be finite and within [0, 1]", tuple(np.flatnonzero(bad_p)[:20])))
     if patient_id in out and out[patient_id].isna().any():
         issues.append(ValidationIssue("missing_patient_id", patient_id, "patient identifiers contain missing values", tuple(np.flatnonzero(out[patient_id].isna())[:20])))
-    if record_id in out and out[record_id].duplicated().any():
-        issues.append(ValidationIssue("duplicate_record_id", record_id, "record identifiers must be unique"))
+    if record_id in out:
+        identity=[c for c in ("dataset_id","model",record_id) if c in out]
+        if out.duplicated(subset=identity).any():
+            issues.append(ValidationIssue("duplicate_record_id", record_id, "record identifiers must be unique within each dataset and model"))
     for key in ("split", "dataset_id", "model"):
         if key in out and out[key].isna().any():
             issues.append(ValidationIssue("missing_metadata", key, f"{key} contains missing values"))
+    for key in ("prediction_time", "intended_prediction_time", "label_time"):
+        if key in out:
+            parsed = pd.to_datetime(out[key], errors="coerce", utc=True)
+            bad = parsed.isna()
+            if bad.any():
+                issues.append(ValidationIssue("invalid_timestamp", key, "timestamps must be parseable and nonmissing", tuple(np.flatnonzero(bad)[:20])))
     if issues:
         raise DataValidationError(issues)
     out[outcome] = y

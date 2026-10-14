@@ -26,8 +26,9 @@ def compare_models(frame: pd.DataFrame, *, model_col="model", record_col="record
     outputs=[]
     for i,a in enumerate(models):
         for b in models[i+1:]:
-            aa=test[test[model_col].astype(str)==a].set_index(record_col)
-            bb=test[test[model_col].astype(str)==b].set_index(record_col)
+            keys=["dataset_id",record_col] if "dataset_id" in test else [record_col]
+            aa=test[test[model_col].astype(str)==a].set_index(keys)
+            bb=test[test[model_col].astype(str)==b].set_index(keys)
             common=aa.index.intersection(bb.index)
             if len(common)<2:
                 outputs.append({"model_a":a,"model_b":b,"status":"inconclusive","reason":"fewer than two common evaluation records"})

@@ -24,8 +24,7 @@ Or evaluate your own CSV with columns `y_true`, `y_prob`, `patient_id`, `record_
 ```bash
 clineval validate --input predictions.csv
 clineval evaluate --input predictions.csv --out reports/run-001 \
-  --metadata configs/example-metadata.json --target-specificity 0.90 \
-  --subgroups site sex --seed 2026 --bootstrap 1000
+  --metadata configs/example-metadata.json --config configs/example.json
 ```
 
 Thresholds for a target operating point are selected only on the validation split and are assessed on held-out test rows. A prespecified `--threshold` is used when no target is requested. If split labels are absent, ClinEval uses patient-grouped splitting when patient IDs exist; it refuses to assume that rows are independent.

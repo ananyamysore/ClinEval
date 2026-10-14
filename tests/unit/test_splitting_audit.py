@@ -45,3 +45,10 @@ def test_missing_provenance_is_not_assessed_as_passed():
     assert findings["AUDIT_PATIENT_OVERLAP"]["status"]=="not_assessable"
     assert findings["AUDIT_THRESHOLD_LEAKAGE"]["status"]=="not_assessable"
 
+
+def test_chronology_is_not_assumed_without_temporal_design_declaration():
+    frame,metadata=generate_synthetic_predictions(n_patients=60)
+    metadata.pop("temporal_order_required")
+    findings=by_rule(audit_evaluation(frame,metadata=metadata,group_key="patient_id"))
+    assert findings["AUDIT_TEMPORAL_ORDER"]["status"]=="not_assessable"
+

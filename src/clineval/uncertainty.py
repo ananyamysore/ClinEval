@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .metrics import classification_metrics, _arrays
+from .metrics import _arrays, classification_metrics
 
 
 def bootstrap_metric_ci(y_true, y_prob, *, metric: str = "roc_auc", confidence: float = 0.95,
@@ -49,7 +49,7 @@ def bootstrap_metric_ci(y_true, y_prob, *, metric: str = "roc_auc", confidence: 
     lo, hi = np.quantile(vals, [alpha, 1-alpha])
     return {"estimate": point, "lower": float(lo), "upper": float(hi), "confidence": confidence,
             "method": "percentile_bootstrap", "unit_method": unit_method,
-            "n_independent_units": int(len(units)), "n_resamples": n_resamples,
+            "n_independent_units": len(units), "n_resamples": n_resamples,
             "finite_replicates": len(vals), "seed": seed, "status": "ok"}
 
 

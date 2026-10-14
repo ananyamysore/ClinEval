@@ -68,20 +68,20 @@ def audit_evaluation(frame: pd.DataFrame, *, metadata: dict[str, Any] | None = N
     else:
         add("AUDIT_GROUP_LEAKAGE", "warning", "not_assessable", "No study-design group key was declared.", {}, "Declare patient, site, family, or other group restrictions required by the study design.")
 
-    if splits is not None and prediction_time_col in frame:
+    if splits is not None and prediction_time_col in frame and meta.get("temporal_order_required", False):
         t=pd.to_datetime(frame[prediction_time_col],errors="coerce",utc=True)
         errors=int(t.isna().sum())
         order=[]
         for part in ("train","validation","test"):
             vals=t[splits==part].dropna()
-            order.append((part,vals.max() if len(vals) else None))
-        bad=any(order[i][1] is not None and order[i+1][1] is not None and order[i][1] >= order[i+1][1] for i in range(2))
+            order.append((part,vals.min() if len(vals) else None,vals.max() if len(vals) else None))
+        bad=any(order[i][2] is not None and order[i+1][1] is not None and order[i][2] >= order[i+1][1] for i in range(2))
         add("AUDIT_TEMPORAL_ORDER", "error" if bad or errors else "info", "violation" if bad or errors else "passed",
             "Partition timestamps violate declared train < validation < test chronology or are unparseable." if bad or errors else "Partition timestamps are ordered according to train < validation < test.",
-            {"max_time_by_split":{k:(str(v) if v is not None else None) for k,v in order},"unparseable":errors},
+            {"time_range_by_split":{k:{"min":str(lo) if lo is not None else None,"max":str(hi) if hi is not None else None} for k,lo,hi in order},"unparseable":errors},
             "Use forward-in-time partitions and verify all feature/label availability times.")
     else:
-        add("AUDIT_TEMPORAL_ORDER", "warning", "not_assessable", "Prediction timestamps are unavailable.", {}, "Record prediction-time timestamps and declare temporal split requirements.")
+        add("AUDIT_TEMPORAL_ORDER", "warning", "not_assessable", "Temporal-order checks require a declared temporal split and prediction timestamps.", {}, "Record prediction-time timestamps and declare whether chronological partitions are required.")
     if prediction_time_col in frame and intended_time_col in frame:
         pred=pd.to_datetime(frame[prediction_time_col],errors="coerce",utc=True)
         intended=pd.to_datetime(frame[intended_time_col],errors="coerce",utc=True)
@@ -91,17 +91,37 @@ def audit_evaluation(frame: pd.DataFrame, *, metadata: dict[str, Any] | None = N
             {"n_rows":int(later.sum()),"examples":np.flatnonzero(later)[:10].tolist()}, "Exclude information recorded after the intended decision time.")
     else:
         add("AUDIT_FEATURE_AFTER_INDEX", "warning", "not_assessable", "Prediction and intended prediction timestamps are not both supplied.", {}, "Supply both timestamps and feature availability-time metadata.")
+    feature_time_columns=meta.get("feature_time_columns",[])
+    present_feature_times=[c for c in feature_time_columns if c in frame]
+    missing_feature_times=sorted(set(feature_time_columns)-set(frame.columns))
+    if intended_time_col in frame and present_feature_times:
+        intended=pd.to_datetime(frame[intended_time_col],errors="coerce",utc=True)
+        later_by_column={}
+        for col in present_feature_times:
+            feature_time=pd.to_datetime(frame[col],errors="coerce",utc=True)
+            later_by_column[col]=int((feature_time>intended).sum())
+        n_late=sum(later_by_column.values())
+        add("AUDIT_FEATURE_AVAILABILITY", "error" if n_late else "info", "violation" if n_late else "passed",
+            "One or more feature availability timestamps occur after intended prediction time." if n_late else "Configured feature timestamps do not occur after intended prediction time.",
+            {"late_rows_by_column":later_by_column,"missing_declared_columns":missing_feature_times},
+            "Exclude features not available at the intended prediction time.")
+    else:
+        add("AUDIT_FEATURE_AVAILABILITY", "warning", "not_assessable", "Feature availability timestamps or intended prediction time were not configured.", {"missing_declared_columns":missing_feature_times}, "Provide feature_time_columns and the intended prediction timestamp.")
 
     if "record_id" in frame:
-        dup=frame.record_id.duplicated(keep=False)
+        identity=[c for c in ("dataset_id","model","record_id") if c in frame]
+        dup=frame.duplicated(subset=identity,keep=False)
         add("AUDIT_DUPLICATE_RECORDS", "error" if dup.any() else "info", "violation" if dup.any() else "passed",
-            "Duplicate record identifiers were found." if dup.any() else "Record identifiers are unique.", {"n_rows":int(dup.sum()),"examples":frame.loc[dup,"record_id"].astype(str).unique().tolist()[:10]}, "Resolve duplicate records or document legitimate repeated records with unique identifiers.")
+            "Duplicate record identifiers were found within a dataset/model." if dup.any() else "Record identifiers are unique within each dataset/model.", {"n_rows":int(dup.sum()),"examples":frame.loc[dup,"record_id"].astype(str).unique().tolist()[:10]}, "Resolve duplicate records or document legitimate repeated records with unique identifiers.")
     else:
         add("AUDIT_DUPLICATE_RECORDS", "warning", "not_assessable", "No record identifier was supplied.", {}, "Supply unique record identifiers.")
     candidate=[c for c in frame.columns if c not in {"y_true","y_prob",split_key,patient_key,"record_id","model","dataset_id"}]
-    duplicated=frame.duplicated(subset=[c for c in ("y_true","y_prob",patient_key) if c in frame],keep=False) if all(c in frame for c in ("y_true","y_prob")) else pd.Series(False,index=frame.index)
+    dup_subset=[c for c in ("dataset_id","model",patient_key,"y_true","y_prob") if c in frame]
+    duplicated=frame.duplicated(subset=dup_subset,keep=False) if all(c in frame for c in ("y_true","y_prob")) else pd.Series(False,index=frame.index)
+    exact_cols=[c for c in frame.columns if c!="record_id"]
+    exact_dups=frame.duplicated(subset=exact_cols,keep=False) if exact_cols else pd.Series(False,index=frame.index)
     add("AUDIT_SUSPICIOUS_DUPLICATES", "warning" if duplicated.any() else "info", "warning" if duplicated.any() else "passed",
-        "Repeated outcome/probability/patient tuples may represent duplicated predictions." if duplicated.any() else "No repeated outcome/probability/patient tuples detected.", {"n_rows":int(duplicated.sum()),"candidate_feature_columns":candidate[:20]}, "Review repeated prediction rows; exact equality is only a heuristic and may be legitimate.")
+        "Repeated outcome/probability/patient tuples may represent duplicated predictions." if duplicated.any() else "No repeated outcome/probability/patient tuples detected.", {"n_rows":int(duplicated.sum()),"n_exact_duplicate_rows_excluding_record_id":int(exact_dups.sum()),"candidate_feature_columns":candidate[:20]}, "Review repeated prediction rows; exact equality is only a heuristic and may be legitimate.")
 
     forbidden=set(forbidden_columns or meta.get("forbidden_columns",[]))
     present=sorted(forbidden & set(frame.columns))
@@ -151,7 +171,13 @@ def audit_evaluation(frame: pd.DataFrame, *, metadata: dict[str, Any] | None = N
             add("AUDIT_MULTICLASS_PROBABILITIES","error" if invalid.any() else "info","violation" if invalid.any() else "passed","Multiclass probability rows are malformed." if invalid.any() else "Multiclass probability rows are finite, bounded, and sum to one.",{"columns":multiclass,"n_invalid_rows":int(invalid.sum())},"Provide one finite probability per class summing to one.")
 
     missing_counts=not bool(meta.get("cohort_counts"))
-    add("AUDIT_INCOMPLETE_REPORTING","warning" if missing_counts else "info","not_assessable" if missing_counts else "passed",
-        "Cohort count provenance is absent; prevalence and subgroup denominators should be reported from eligible evaluation rows." if missing_counts else "Cohort count metadata is present.",{"has_cohort_counts":not missing_counts,"has_subgroup_columns":bool(meta.get("subgroup_columns"))},"Report eligible cohort counts, prevalence, subgroup denominators, and split metadata.")
+    subgroup_cols=meta.get("subgroup_columns",[])
+    missing_subgroups=[c for c in subgroup_cols if c not in frame]
+    missing_prevalence="y_true" not in frame or frame.y_true.dropna().empty
+    missing_split=split_key not in frame
+    incomplete=missing_counts or missing_prevalence or bool(missing_subgroups) or missing_split
+    add("AUDIT_INCOMPLETE_REPORTING","warning" if incomplete else "info","not_assessable" if missing_counts else ("warning" if incomplete else "passed"),
+        "Cohort counts, prevalence, subgroup denominators, or split metadata are incomplete." if incomplete else "Cohort count metadata, outcome prevalence, subgroup columns, and split labels are present.",
+        {"has_cohort_counts":not missing_counts,"outcome_prevalence":float(frame.y_true.dropna().mean()) if not missing_prevalence else None,"missing_subgroup_columns":missing_subgroups,"subgroup_counts":{c:frame[c].value_counts(dropna=False).to_dict() for c in subgroup_cols if c in frame},"has_split_metadata":not missing_split},"Report eligible cohort counts, prevalence, subgroup denominators, and split metadata.")
     return [asdict(f) for f in findings]
 

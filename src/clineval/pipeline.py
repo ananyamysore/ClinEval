@@ -42,6 +42,8 @@ def evaluate(frame: pd.DataFrame, out_dir: str|Path, *, metadata: dict|None=None
         data["split"]=split.labels
         meta["generated_split"]={"method":split.metadata["method"],"seed":seed,"patient_counts":split.metadata["patient_counts"]}
     data=validate_prediction_table(data,allow_invalid_probabilities=False)
+    meta.setdefault("cohort_counts", {"records_total":int(len(data)),
+                                      "records_by_split":data.split.value_counts().astype(int).to_dict()})
     if "model" not in data: data["model"]="model"
     if not set(data.split.astype(str)).issubset({"train","validation","test"}):
         raise ValueError("split values must be train, validation, and/or test")
@@ -91,7 +93,7 @@ def evaluate(frame: pd.DataFrame, out_dir: str|Path, *, metadata: dict|None=None
     files=write_tables(root,metrics=results,subgroups=subgroups,audit=audit,comparisons=comparisons)
     files.extend(write_evaluation_figures(data,root))
     summary={"package":"ClinEval","version":"0.1.0","synthetic_data":bool(meta.get("synthetic",False)),
-             "n_records":int(len(data)),"n_patients":int(data.patient_id.nunique()) if "patient_id" in data else None,
+             "n_records":len(data),"n_patients":int(data.patient_id.nunique()) if "patient_id" in data else None,
              "split_counts":data.split.value_counts().to_dict(),"software_versions":{"python":platform.python_version(),
                 "numpy":np.__version__,"pandas":pd.__version__,"scipy":scipy.__version__,"scikit_learn":sklearn.__version__},
              "seed":seed,"models":results,"subgroups":subgroups,"audit":audit,

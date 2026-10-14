@@ -26,7 +26,7 @@ def subgroup_metrics(frame: pd.DataFrame, *, subgroup_columns: list[str], outcom
             metrics=classification_metrics(sub[outcome], sub[probability], threshold=threshold)
             auc_ci=bootstrap_metric_ci(sub[outcome], sub[probability], metric="roc_auc",
                                        n_resamples=max(100,ci_resamples), seed=seed,
-                                       groups=sub[patient_id] if patient_id in sub else None)
+                                       groups=sub.get(patient_id, None))
             results.append({"subgroup":col,"level":str(level),"n":len(sub),
                             "n_positive":int(sub[outcome].sum()),"n_negative":int((1-sub[outcome]).sum()),
                             "metrics":metrics,"roc_auc_ci":auc_ci,

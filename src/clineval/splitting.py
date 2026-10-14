@@ -52,7 +52,7 @@ def patient_group_split(frame: pd.DataFrame, *, patient_col: str = "patient_id",
     return SplitResult(pd.Series(labels, index=frame.index, name="split"),
                        {"method": "patient_grouped", "seed": seed,
                         "patient_counts": pd.Series(labels).groupby(labels).size().to_dict(),
-                        "n_patients": int(len(unique))})
+                        "n_patients": len(unique)})
 
 
 def temporal_split(frame: pd.DataFrame, *, timestamp_col: str = "prediction_time",
@@ -68,7 +68,7 @@ def temporal_split(frame: pd.DataFrame, *, timestamp_col: str = "prediction_time
     order = np.argsort(time.to_numpy(), kind="stable")
     sorted_times = time.iloc[order]
     n = len(frame)
-    cuts = [int(round(n * fractions[0])), int(round(n * (fractions[0]+fractions[1])))]
+    cuts = [round(n * fractions[0]), round(n * (fractions[0]+fractions[1]))]
     # Move boundaries to avoid splitting tied timestamps.
     while cuts[0] < n and cuts[0] > 0 and sorted_times.iloc[cuts[0]-1] == sorted_times.iloc[cuts[0]]:
         cuts[0] += 1

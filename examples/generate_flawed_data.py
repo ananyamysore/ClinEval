@@ -1,7 +1,7 @@
 """Generate valid and intentionally flawed audit fixtures as local CSV/JSON files."""
 
-from pathlib import Path
 import json
+from pathlib import Path
 
 from clineval.synthetic import generate_synthetic_predictions
 

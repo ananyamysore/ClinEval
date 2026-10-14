@@ -25,7 +25,6 @@ def generate_synthetic_predictions(*, seed: int=0, n_patients: int=600,
     rng=np.random.default_rng(seed)
     groups=np.array(["A" if i%2==0 else "B" for i in range(n_patients)])
     latent=rng.normal(size=n_patients)
-    prevalence=0.07 if low_prevalence else 0.3
     prob_y=1/(1+np.exp(-(-2.55+1.2*latent))) if low_prevalence else 1/(1+np.exp(-(-0.3+0.9*latent)))
     patient_y=rng.binomial(1,prob_y)
     split=np.empty(n_patients,dtype=object)
@@ -41,7 +40,7 @@ def generate_synthetic_predictions(*, seed: int=0, n_patients: int=600,
             score=1/(1+np.exp(-(-1.1+2.1*signal+1.2*(y-.5)+rng.normal(0,.55))))
             if miscalibrated: score=float(np.clip(score**0.45,0,1))
             split_rank={"train":0,"validation":1,"test":2}[str(split[i])]
-            timestamp=base+pd.Timedelta(days=int(split_rank*n_patients*2+i*2+visit))
+            timestamp=base+pd.Timedelta(days=int(split_rank*(n_patients*repeated_measurements+1)+i*repeated_measurements+visit))
             rows.append({"record_id":f"r{i}_{visit}","patient_id":f"p{i}","dataset_id":"synthetic-demo",
                          "model":"model_demo","split":split[i],"y_true":y,"y_prob":score,
                          "subgroup":groups[i],"prediction_time":timestamp,
@@ -60,6 +59,7 @@ def generate_synthetic_predictions(*, seed: int=0, n_patients: int=600,
               "threshold_selected_on":"test" if "test_threshold" in active else "validation",
               "calibration_fit_on":"validation","fit_scopes":{"normalization":"train","imputation":"train","feature_selection":"train","threshold_tuning":"validation","calibration":"validation"},
               "forbidden_columns":["target_outcome_copy"] if "target_leakage" in active else [],
-              "subgroup_columns":["subgroup"],"cohort_counts":{"total":len(frame)}}
+              "subgroup_columns":["subgroup"],"cohort_counts":{"total":len(frame)},
+              "temporal_order_required":True}
     return frame,metadata
 
