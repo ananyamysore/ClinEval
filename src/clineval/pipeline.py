@@ -77,7 +77,8 @@ def evaluate(frame: pd.DataFrame, out_dir: str|Path, *, metadata: dict|None=None
         group=test.patient_id if "patient_id" in test else None
         ci={m:bootstrap_metric_ci(test.y_true,test.y_prob,metric=m,n_resamples=n_bootstrap,
                                   seed=seed,groups=group,threshold=selected)
-            for m in ("roc_auc","average_precision","brier_score")}
+            for m in ("roc_auc","average_precision","brier_score","sensitivity",
+                      "specificity","precision_ppv","negative_predictive_value")}
         calibration=calibration_summary(test.y_true,test.y_prob)
         calibration.update(calibration_intercept_slope(test.y_true,test.y_prob))
         results.append({"model":str(model),"status":"evaluated","threshold_selection":selection,

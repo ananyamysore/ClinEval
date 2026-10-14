@@ -12,6 +12,9 @@ def test_synthetic_pipeline_exports_report_and_heldout_metrics(tmp_path):
     assert saved["synthetic_data"] is True
     assert result["models"][0]["threshold_selection"]["selection_partition"]=="validation"
     assert result["models"][0]["test_metrics"]["n"]>0
+    assert {"sensitivity","specificity","precision_ppv","negative_predictive_value"}.issubset(
+        result["models"][0]["confidence_intervals"]
+    )
     for name in ("audit.json","metrics.csv","subgroups.csv","roc_curve.png","precision_recall.png","calibration.png","report.md"):
         assert (tmp_path/name).exists()
     assert "SYNTHETIC EXAMPLE" in (tmp_path/"report.md").read_text()
