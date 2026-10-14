@@ -32,7 +32,7 @@ def load_config(path: str | Path) -> EvaluationConfig:
     """Load a JSON config and reject unknown keys or invalid values."""
     values = json.loads(Path(path).read_text())
     if not isinstance(values, dict):
-        raise ValueError("configuration root must be a JSON object")
+        raise TypeError("configuration root must be a JSON object")
     allowed = {"threshold", "target_specificity", "subgroup_columns", "bootstrap_resamples", "seed"}
     unknown = set(values) - allowed
     if unknown:

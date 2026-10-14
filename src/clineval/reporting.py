@@ -7,13 +7,13 @@ from pathlib import Path
 from typing import Any
 
 import matplotlib
-matplotlib.use("Agg")
-# isort: split
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.calibration import calibration_curve
 from sklearn.metrics import PrecisionRecallDisplay, RocCurveDisplay
+
+matplotlib.use("Agg")
 
 
 def write_json(path: str|Path, obj: Any) -> Path:

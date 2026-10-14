@@ -37,14 +37,35 @@ def compare_models(frame: pd.DataFrame, *, model_col="model", record_col="record
             if not ya.equals(yb):
                 outputs.append({"model_a":a,"model_b":b,"status":"invalid","reason":"outcomes differ on common record identifiers"})
                 continue
+            groups=None
+            if "patient_id" in aa and "patient_id" in bb:
+                ga=aa.loc[common,"patient_id"]; gb=bb.loc[common,"patient_id"]
+                if not ga.equals(gb):
+                    outputs.append({"model_a":a,"model_b":b,"status":"invalid","reason":"patient identifiers differ for common evaluation records"})
+                    continue
+                groups=(aa.loc[common,["dataset_id","patient_id"]].astype(str).agg("::".join,axis=1).to_numpy()
+                        if "dataset_id" in aa else ga.to_numpy())
             pa=aa.loc[common,probability_col].to_numpy(float); pb=bb.loc[common,probability_col].to_numpy(float)
             d=(pa-ya.to_numpy(float))**2-(pb-ya.to_numpy(float))**2
-            p=float(wilcoxon(d).pvalue) if np.any(d) else 1.0
+            unit_diffs=pd.Series(d,index=groups if groups is not None else np.arange(len(d))).groupby(level=0).mean().to_numpy()
+            p=float(wilcoxon(unit_diffs).pvalue) if np.any(unit_diffs) and len(unit_diffs)>1 else (1.0 if len(unit_diffs)>1 else None)
+            rng=np.random.default_rng(seed)
+            diff_samples=[]
+            if len(unit_diffs)>1:
+                for _ in range(n_resamples):
+                    sampled=rng.choice(unit_diffs,size=len(unit_diffs),replace=True)
+                    diff_samples.append(float(sampled.mean()))
+                difference_ci={"lower":float(np.quantile(diff_samples,.025)),"upper":float(np.quantile(diff_samples,.975)),
+                               "method":"paired percentile bootstrap by patient" if groups is not None else "paired row bootstrap; independent records assumed",
+                               "n_independent_units":len(unit_diffs),"n_resamples":n_resamples,"seed":seed}
+            else:
+                difference_ci={"lower":None,"upper":None,"method":"inconclusive","n_independent_units":len(unit_diffs)}
             outputs.append({"model_a":a,"model_b":b,"status":"descriptive_paired","n_common":len(common),
                 "brier_a":classification_metrics(ya,pa)["brier_score"],"brier_b":classification_metrics(yb,pb)["brier_score"],
-                "mean_brier_difference_a_minus_b":float(d.mean()),"wilcoxon_p_value":p,
-                "brier_a_ci":bootstrap_metric_ci(ya,pa,metric="brier_score",n_resamples=n_resamples,seed=seed),
-                "brier_b_ci":bootstrap_metric_ci(yb,pb,metric="brier_score",n_resamples=n_resamples,seed=seed),
-                "interpretation":"exploratory paired comparison; row bootstrap assumes independent records"})
+                "mean_brier_difference_a_minus_b":float(d.mean()),"mean_unit_difference_a_minus_b":float(unit_diffs.mean()),
+                "difference_ci":difference_ci,"wilcoxon_p_value":p,
+                "brier_a_ci":bootstrap_metric_ci(ya,pa,metric="brier_score",n_resamples=n_resamples,seed=seed,groups=groups),
+                "brier_b_ci":bootstrap_metric_ci(yb,pb,metric="brier_score",n_resamples=n_resamples,seed=seed,groups=groups),
+                "interpretation":"exploratory paired comparison; patient clusters are the resampling and paired-test unit when patient IDs are supplied"})
     return outputs
 

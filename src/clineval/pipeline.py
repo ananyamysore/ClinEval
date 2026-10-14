@@ -42,13 +42,15 @@ def evaluate(frame: pd.DataFrame, out_dir: str|Path, *, metadata: dict|None=None
         data["split"]=split.labels
         meta["generated_split"]={"method":split.metadata["method"],"seed":seed,"patient_counts":split.metadata["patient_counts"]}
     data=validate_prediction_table(data,allow_invalid_probabilities=False)
-    meta.setdefault("cohort_counts", {"records_total":int(len(data)),
+    meta.setdefault("cohort_counts", {"records_total":len(data),
                                       "records_by_split":data.split.value_counts().astype(int).to_dict()})
     if "model" not in data: data["model"]="model"
     if not set(data.split.astype(str)).issubset({"train","validation","test"}):
         raise ValueError("split values must be train, validation, and/or test")
     if target_specificity is not None and (data.split.astype(str)=="validation").any():
         meta.setdefault("threshold_selected_on", "validation")
+    elif target_specificity is None:
+        meta.setdefault("threshold_selected_on", "prespecified")
     audit=audit_evaluation(data,metadata=meta,group_key=meta.get("group_key"))
     warnings=[f for f in audit if f["severity"] in {"warning","error"} and f["status"]!="passed"]
     results=[]

@@ -19,7 +19,7 @@ class SplitResult:
 
 def patient_group_split(frame: pd.DataFrame, *, patient_col: str = "patient_id",
                         fractions: tuple[float, float, float] = (0.6, 0.2, 0.2),
-                        seed: int = 0) -> SplitResult:
+                        seed: int = 0, outcome_col: str = "y_true") -> SplitResult:
     """Assign whole patients to train/validation/test using deterministic group splits.
 
     This is not a stratified group splitter; class balance must be inspected after
@@ -49,14 +49,25 @@ def patient_group_split(frame: pd.DataFrame, *, patient_col: str = "patient_id",
     check = pd.DataFrame({"patient": groups, "split": labels}).groupby("patient").split.nunique()
     if (check > 1).any():
         raise RuntimeError("internal error: patient appears in multiple partitions")
-    return SplitResult(pd.Series(labels, index=frame.index, name="split"),
+    label_series=pd.Series(labels,index=frame.index,name="split")
+    row_counts=label_series.value_counts().to_dict()
+    patient_counts=frame.assign(_split=labels).groupby("_split")[patient_col].nunique().to_dict()
+    class_counts={}
+    if outcome_col in frame:
+        class_counts=frame.assign(_split=labels).groupby(["_split",outcome_col],dropna=False).size().unstack(fill_value=0).to_dict(orient="index")
+    warnings=[]
+    if class_counts and any(len(counts)<2 or any(v==0 for v in counts.values()) for counts in class_counts.values()):
+        warnings.append("At least one split lacks an outcome class; discrimination metrics may be undefined.")
+    return SplitResult(label_series,
                        {"method": "patient_grouped", "seed": seed,
-                        "patient_counts": pd.Series(labels).groupby(labels).size().to_dict(),
+                        "row_counts":row_counts,"patient_counts":patient_counts,
+                        "class_counts_by_split":class_counts,"warnings":warnings,
                         "n_patients": len(unique)})
 
 
 def temporal_split(frame: pd.DataFrame, *, timestamp_col: str = "prediction_time",
-                   fractions: tuple[float, float, float] = (0.6, 0.2, 0.2)) -> SplitResult:
+                   fractions: tuple[float, float, float] = (0.6, 0.2, 0.2),
+                   outcome_col: str = "y_true") -> SplitResult:
     """Split rows chronologically; equal timestamps are kept in one partition."""
     if timestamp_col not in frame:
         raise ValueError(f"missing timestamp column {timestamp_col!r}")
@@ -80,8 +91,17 @@ def temporal_split(frame: pd.DataFrame, *, timestamp_col: str = "prediction_time
     labels[order[:cuts[0]]] = "train"
     labels[order[cuts[0]:cuts[1]]] = "validation"
     labels[order[cuts[1]:]] = "test"
-    return SplitResult(pd.Series(labels, index=frame.index, name="split"),
+    label_series=pd.Series(labels,index=frame.index,name="split")
+    class_counts={}
+    if outcome_col in frame:
+        class_counts=frame.assign(_split=labels).groupby(["_split",outcome_col],dropna=False).size().unstack(fill_value=0).to_dict(orient="index")
+    warnings=[]
+    if class_counts and any(len(counts)<2 or any(v==0 for v in counts.values()) for counts in class_counts.values()):
+        warnings.append("At least one chronological partition lacks an outcome class; metrics may be undefined.")
+    return SplitResult(label_series,
                        {"method": "chronological", "timestamp_col": timestamp_col,
+                        "row_counts":label_series.value_counts().to_dict(),
+                        "class_counts_by_split":class_counts,"warnings":warnings,
                         "boundary_times": [str(sorted_times.iloc[cuts[0]-1]), str(sorted_times.iloc[cuts[1]-1])]})
 
 

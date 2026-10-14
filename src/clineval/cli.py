@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from .data import DataValidationError, validate_prediction_table
 from .config import EvaluationConfig, load_config
+from .data import DataValidationError, validate_prediction_table
 from .pipeline import evaluate
 
 
